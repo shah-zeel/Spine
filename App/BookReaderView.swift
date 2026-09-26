@@ -12,6 +12,7 @@ struct BookReaderView: View {
   @State private var selectedPassage: SelectedPassage?
   @State private var isShowingContents = false
   @State private var isShowingAnnotations = false
+  @State private var isShowingBookSummary = false
   @State private var editingPassage: SelectedPassage?
 
   private var safePageIndex: Int {
@@ -72,7 +73,8 @@ struct BookReaderView: View {
             onNext: { turnPage(backward: false) },
             onAudio: { audio.toggle(startingAtPage: safePageIndex) },
             onContents: { isShowingContents = true },
-            onAnnotations: { isShowingAnnotations = true }
+            onAnnotations: { isShowingAnnotations = true },
+            onBookSummary: { isShowingBookSummary = true }
           )
           .padding(.trailing, 20)
           .padding(.bottom, max(geometry.safeAreaInsets.bottom, 18) + 75)
@@ -107,6 +109,9 @@ struct BookReaderView: View {
     }
     .sheet(isPresented: $isShowingAnnotations) {
       AnnotationLibraryView(notebook: notebook)
+    }
+    .sheet(isPresented: $isShowingBookSummary) {
+      BookSummaryView(pages: pages, annotations: notebook.annotations)
     }
     .sheet(item: $editingPassage) { passage in
       AnnotationEditorView(
@@ -154,6 +159,7 @@ private struct ReaderControlDock: View {
   var onAudio: () -> Void
   var onContents: () -> Void
   var onAnnotations: () -> Void
+  var onBookSummary: () -> Void
 
   private var step: Int { showsSpread ? 2 : 1 }
 
@@ -164,6 +170,7 @@ private struct ReaderControlDock: View {
       dockButton(isPlaying ? "Pause audiobook" : "Play audiobook", symbol: isPlaying ? "pause.fill" : "play.fill", action: onAudio)
       dockButton("Contents", symbol: "list.bullet", action: onContents)
       dockButton("Annotations", symbol: "quote.bubble", action: onAnnotations)
+      dockButton("Summarize notes with AI", symbol: "sparkles", action: onBookSummary)
       dockButton("Next page", symbol: "chevron.right", action: onNext)
         .disabled(pageIndex + step >= pageCount)
     }
