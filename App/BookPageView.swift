@@ -43,6 +43,7 @@ struct BookPageView: View {
         SelectablePageTextView(
           pageIndex: page.number - 1,
           text: page.content,
+          fontPointSize: min(max(min(geometry.size.height * 0.031, geometry.size.width * 0.045), 14), 24),
           highlights: notebook.highlights(on: page.number - 1),
           activeRange: activeSpeechLine?.pageIndex == page.number - 1 ? activeSpeechLine?.range : nil,
           onSelectionChange: onSelectionChange
@@ -79,6 +80,7 @@ struct BookPageView: View {
 private struct SelectablePageTextView: UIViewRepresentable {
   var pageIndex: Int
   var text: String
+  var fontPointSize: CGFloat
   var highlights: [PassageHighlight]
   var activeRange: NSRange?
   var onSelectionChange: (SelectedPassage?) -> Void
@@ -111,10 +113,10 @@ private struct SelectablePageTextView: UIViewRepresentable {
   private func render(in textView: BookSelectableTextView) {
     let ranges = highlights.map { "\($0.range.location):\($0.range.length):\($0.color.rawValue)" }.joined(separator: "|")
     let active = activeRange.map { "\($0.location):\($0.length)" } ?? "none"
-    let signature = "\(text)|\(ranges)|\(active)"
+    let signature = "\(text)|\(fontPointSize)|\(ranges)|\(active)"
     guard textView.renderedSignature != signature else { return }
 
-    let baseFont = UIFont(name: "Georgia", size: 17) ?? UIFont.systemFont(ofSize: 17)
+    let baseFont = UIFont(name: "Georgia", size: fontPointSize) ?? UIFont.systemFont(ofSize: fontPointSize)
     let font = UIFontMetrics(forTextStyle: .body).scaledFont(for: baseFont)
     let paragraph = NSMutableParagraphStyle()
     paragraph.lineSpacing = 7
@@ -138,6 +140,9 @@ private struct SelectablePageTextView: UIViewRepresentable {
     let safeLocation = min(selectedRange.location, attributed.length)
     let safeLength = min(selectedRange.length, attributed.length - safeLocation)
     textView.selectedRange = NSRange(location: safeLocation, length: safeLength)
+    if let activeRange, isValid(activeRange, length: attributed.length) {
+      textView.scrollRangeToVisible(activeRange)
+    }
     textView.renderedSignature = signature
   }
 

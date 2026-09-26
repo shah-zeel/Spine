@@ -45,6 +45,7 @@ enum BookSpeech {
 @Observable
 final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
   private(set) var isPlaying = false
+  private(set) var hasStartedPlayback = false
   private(set) var currentLineIndex = 0
 
   var lines: [SpeechLine] { BookSpeech.lines }
@@ -53,6 +54,7 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
 
   @ObservationIgnored private let synthesizer = AVSpeechSynthesizer()
   @ObservationIgnored private var lineIndices: [ObjectIdentifier: Int] = [:]
+  @ObservationIgnored private var activeUtterance: ObjectIdentifier?
 
   override init() {
     super.init()
@@ -64,6 +66,7 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
     if synthesizer.isPaused {
       synthesizer.continueSpeaking()
       isPlaying = true
+      hasStartedPlayback = true
     } else if synthesizer.isSpeaking {
       synthesizer.pauseSpeaking(at: .immediate)
       isPlaying = false
@@ -79,11 +82,27 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
   }
 
   func start(atPage pageIndex: Int) {
-    if synthesizer.isSpeaking || synthesizer.isPaused {
-      synthesizer.stopSpeaking(at: .immediate)
-    }
+    invalidateCurrentUtterance()
     currentLineIndex = lines.firstIndex(where: { $0.pageIndex >= pageIndex }) ?? 0
     speakCurrentLine()
+  }
+
+  func synchronize(toPage pageIndex: Int) {
+    let shouldResume = isPlaying
+    invalidateCurrentUtterance()
+    currentLineIndex = lines.firstIndex(where: { $0.pageIndex >= pageIndex }) ?? 0
+    if shouldResume {
+      speakCurrentLine()
+    }
+  }
+
+  private func invalidateCurrentUtterance() {
+    if synthesizer.isSpeaking || synthesizer.isPaused {
+      isPlaying = false
+      activeUtterance = nil
+      lineIndices.removeAll()
+      synthesizer.stopSpeaking(at: .immediate)
+    }
   }
 
   func speechSynthesizer(
@@ -91,13 +110,17 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
     willSpeakRangeOfSpeechString characterRange: NSRange,
     utterance: AVSpeechUtterance
   ) {
-    if let index = lineIndices[ObjectIdentifier(utterance)] {
+    let id = ObjectIdentifier(utterance)
+    if activeUtterance == id, let index = lineIndices[id] {
       currentLineIndex = index
     }
   }
 
   func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-    lineIndices.removeValue(forKey: ObjectIdentifier(utterance))
+    let id = ObjectIdentifier(utterance)
+    lineIndices.removeValue(forKey: id)
+    guard activeUtterance == id else { return }
+    activeUtterance = nil
     guard isPlaying else { return }
     currentLineIndex += 1
     if currentLineIndex < lines.count {
@@ -117,7 +140,9 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
     utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
     utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92
     lineIndices[ObjectIdentifier(utterance)] = currentLineIndex
+    activeUtterance = ObjectIdentifier(utterance)
     isPlaying = true
+    hasStartedPlayback = true
     synthesizer.speak(utterance)
   }
 }

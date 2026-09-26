@@ -104,9 +104,12 @@ struct ContentView: View {
       return geometry.size.width > geometry.size.height ? .openLandscape : .openPortrait
     case .partiallyOpen:
       if #available(iOS 27.1, *), let division = geometry.reservedRegions(kind: .division).first {
-        return division.frame.width > division.frame.height ? .laptopNotes : .tentAudio
+        if division.frame.height > division.frame.width {
+          return .openLandscape
+        }
+        return geometry.size.width > geometry.size.height ? .tentAudio : .laptopNotes
       }
-      return geometry.size.width > geometry.size.height ? .tentAudio : .laptopNotes
+      return geometry.size.width > geometry.size.height ? .openLandscape : .openPortrait
     case .noHinge:
       return geometry.size.width > geometry.size.height ? .openLandscape : .openPortrait
     case .unknown:

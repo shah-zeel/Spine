@@ -68,42 +68,51 @@ struct TentAudioView: View {
             .accessibilityLabel(audio.isPlaying ? "Pause audiobook" : "Play audiobook")
             .padding(.top, 24)
 
-            Text("LISTENING")
+            Text(audio.isPlaying ? "LISTENING" : "A QUIET MOMENT")
               .font(.system(.caption2, design: .rounded, weight: .semibold))
               .tracking(1.4)
               .foregroundStyle(.white.opacity(0.55))
               .padding(.top, 11)
 
-            ScrollView {
-              LazyVStack(spacing: 12) {
-                ForEach(visibleLines) { line in
-                  TentSentenceLine(
-                    line: line,
-                    isCurrent: line.id == audio.activeLineID,
-                    annotation: annotation(for: line)
-                  ) {
-                    selectedPassage = SelectedPassage(pageIndex: line.pageIndex, quote: line.text, range: line.range)
+            if audio.hasStartedPlayback {
+              ScrollView {
+                LazyVStack(spacing: 12) {
+                  ForEach(visibleLines) { line in
+                    TentSentenceLine(
+                      line: line,
+                      isCurrent: line.id == audio.activeLineID,
+                      annotation: annotation(for: line)
+                    ) {
+                      selectedPassage = SelectedPassage(pageIndex: line.pageIndex, quote: line.text, range: line.range)
+                    }
+                    .id(line.id)
                   }
-                  .id(line.id)
+                }
+                .frame(maxWidth: 620)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 26)
+              }
+              .scrollIndicators(.hidden)
+              .frame(maxHeight: .infinity)
+              .onChange(of: audio.activeLineID) { _, lineID in
+                guard let lineID else { return }
+                withAnimation(.smooth(duration: 0.4)) {
+                  proxy.scrollTo(lineID, anchor: .center)
                 }
               }
-              .frame(maxWidth: 620)
-              .frame(maxWidth: .infinity)
-              .padding(.horizontal, 28)
-              .padding(.vertical, 26)
-            }
-            .scrollIndicators(.hidden)
-            .frame(maxHeight: .infinity)
-            .onChange(of: audio.activeLineID) { _, lineID in
-              guard let lineID else { return }
-              withAnimation(.smooth(duration: 0.4)) {
+              .task(id: audio.activeLineID) {
+                guard let lineID = audio.activeLineID else { return }
+                await Task.yield()
                 proxy.scrollTo(lineID, anchor: .center)
               }
-            }
-            .task(id: audio.activeLineID) {
-              guard let lineID = audio.activeLineID else { return }
-              await Task.yield()
-              proxy.scrollTo(lineID, anchor: .center)
+            } else {
+              Text("Play to follow the story, one sentence at a time.")
+                .font(.system(.body, design: .serif))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(FolioPalette.page.opacity(0.62))
+                .frame(maxWidth: 300)
+                .frame(maxHeight: .infinity)
             }
           }
           .frame(maxWidth: .infinity, maxHeight: .infinity)

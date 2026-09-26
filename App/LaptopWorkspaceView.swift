@@ -19,6 +19,15 @@ struct LaptopWorkspaceView: View {
       .arrangementViewStyle(.split.axes(.vertical))
       .background(FolioPalette.canvas)
       .ignoresSafeArea()
+      .onChange(of: pageIndex) { _, newPageIndex in
+        if audio.hasStartedPlayback, audio.currentLine?.pageIndex != newPageIndex {
+          audio.synchronize(toPage: newPageIndex)
+        }
+      }
+      .onChange(of: audio.currentLine?.pageIndex) { _, spokenPageIndex in
+        guard audio.isPlaying, let spokenPageIndex, spokenPageIndex != pageIndex else { return }
+        pageIndex = spokenPageIndex
+      }
     } else {
       GeometryReader { geometry in
         VStack(spacing: 0) {
@@ -49,6 +58,7 @@ struct LaptopWorkspaceView: View {
   private var notesPane: some View {
     LaptopNotesPane(
       passage: $selectedPassage,
+      startingPage: pageIndex,
       audio: audio,
       notebook: notebook,
       onShowAnnotations: { isShowingAnnotations = true }
@@ -61,6 +71,7 @@ struct LaptopWorkspaceView: View {
 
 private struct LaptopNotesPane: View {
   @Binding var passage: SelectedPassage?
+  var startingPage: Int
   var audio: AudioReadingModel
   var notebook: ReaderNotebook
   var onShowAnnotations: () -> Void
@@ -74,7 +85,7 @@ private struct LaptopNotesPane: View {
     VStack(alignment: .leading, spacing: 12) {
       HStack(spacing: 12) {
         Button {
-          audio.toggle(startingAtPage: passage?.pageIndex ?? audio.currentLine?.pageIndex ?? 0)
+          audio.toggle(startingAtPage: startingPage)
         } label: {
           Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
             .font(.system(size: 13, weight: .semibold))
