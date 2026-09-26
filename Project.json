@@ -3,7 +3,7 @@
     "Debug": "debug",
     "Release": "release"
   },
-  "name": "Folio",
+  "name": "Spine",
   "options": {
     "deploymentTarget": {
       "iOS": "26.0"
@@ -19,7 +19,7 @@
       "info": {
         "path": "App/Info.plist",
         "properties": {
-          "CFBundleDisplayName": "Folio",
+          "CFBundleDisplayName": "Spine",
           "CFBundleShortVersionString": "1.0",
           "CFBundleVersion": "1",
           "ITSAppUsesNonExemptEncryption": false,

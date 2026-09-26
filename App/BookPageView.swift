@@ -19,7 +19,7 @@ struct BookPageView: View {
 
           Spacer(minLength: 8)
 
-          Text("FOLIO")
+          Text("SPINE")
             .font(.system(size: 8, weight: .medium, design: .rounded))
             .tracking(1.4)
             .foregroundStyle(FolioPalette.mutedInk.opacity(0.72))
