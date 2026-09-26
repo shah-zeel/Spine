@@ -47,6 +47,7 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
   private(set) var isPlaying = false
   private(set) var hasStartedPlayback = false
   private(set) var currentLineIndex = 0
+  private(set) var spokenCharacterRange: NSRange?
 
   var lines: [SpeechLine] { BookSpeech.lines }
   var currentLine: SpeechLine? { lines.indices.contains(currentLineIndex) ? lines[currentLineIndex] : nil }
@@ -84,6 +85,7 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
   func start(atPage pageIndex: Int) {
     invalidateCurrentUtterance()
     currentLineIndex = lines.firstIndex(where: { $0.pageIndex >= pageIndex }) ?? 0
+    spokenCharacterRange = nil
     speakCurrentLine()
   }
 
@@ -91,6 +93,7 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
     let shouldResume = isPlaying
     invalidateCurrentUtterance()
     currentLineIndex = lines.firstIndex(where: { $0.pageIndex >= pageIndex }) ?? 0
+    spokenCharacterRange = nil
     if shouldResume {
       speakCurrentLine()
     }
@@ -113,6 +116,7 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
     let id = ObjectIdentifier(utterance)
     if activeUtterance == id, let index = lineIndices[id] {
       currentLineIndex = index
+      spokenCharacterRange = characterRange
     }
   }
 
@@ -121,6 +125,7 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
     lineIndices.removeValue(forKey: id)
     guard activeUtterance == id else { return }
     activeUtterance = nil
+    spokenCharacterRange = nil
     guard isPlaying else { return }
     currentLineIndex += 1
     if currentLineIndex < lines.count {
@@ -134,8 +139,10 @@ final class AudioReadingModel: NSObject, AVSpeechSynthesizerDelegate {
   private func speakCurrentLine() {
     guard lines.indices.contains(currentLineIndex) else {
       isPlaying = false
+      spokenCharacterRange = nil
       return
     }
+    spokenCharacterRange = nil
     let utterance = AVSpeechUtterance(string: lines[currentLineIndex].text)
     utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
     utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92

@@ -5,9 +5,6 @@ struct TentPostureView: View {
   var audio: AudioReadingModel
   var notebook: ReaderNotebook
 
-  @State private var firstInterfaceOrientation: UIInterfaceOrientation?
-  @State private var currentInterfaceOrientation: UIInterfaceOrientation?
-
   var body: some View {
     if #available(iOS 27.1, *) {
       ArrangementView {
@@ -16,82 +13,12 @@ struct TentPostureView: View {
           .accessibilityHidden(true)
       } secondary: {
         TentAudioView(audio: audio, notebook: notebook)
-          .rotationEffect(needsCounterRotation ? .degrees(180) : .zero)
+          .rotationEffect(.degrees(180))
       }
       .arrangementViewStyle(.overlay)
       .background(FolioPalette.forestShade)
-      .overlay(alignment: .topLeading) {
-        InterfaceOrientationProbe(onChange: updateInterfaceOrientation)
-          .frame(width: 1, height: 1)
-          .opacity(0)
-          .accessibilityHidden(true)
-          .allowsHitTesting(false)
-      }
     } else {
       TentAudioView(audio: audio, notebook: notebook)
-    }
-  }
-
-  private var needsCounterRotation: Bool {
-    guard let firstInterfaceOrientation, let currentInterfaceOrientation else { return false }
-    switch (firstInterfaceOrientation, currentInterfaceOrientation) {
-    case (.portrait, .portraitUpsideDown),
-      (.portraitUpsideDown, .portrait),
-      (.landscapeLeft, .landscapeRight),
-      (.landscapeRight, .landscapeLeft):
-      return true
-    default:
-      return false
-    }
-  }
-
-  private func updateInterfaceOrientation(_ orientation: UIInterfaceOrientation) {
-    guard orientation != currentInterfaceOrientation else { return }
-    if firstInterfaceOrientation == nil {
-      firstInterfaceOrientation = orientation
-    }
-    currentInterfaceOrientation = orientation
-  }
-}
-
-private struct InterfaceOrientationProbe: UIViewRepresentable {
-  var onChange: (UIInterfaceOrientation) -> Void
-
-  func makeUIView(context: Context) -> OrientationReportingView {
-    let view = OrientationReportingView()
-    view.onChange = onChange
-    return view
-  }
-
-  func updateUIView(_ uiView: OrientationReportingView, context: Context) {
-    uiView.onChange = onChange
-    uiView.reportOrientation()
-  }
-}
-
-private final class OrientationReportingView: UIView {
-  var onChange: ((UIInterfaceOrientation) -> Void)?
-  private var lastReportedOrientation: UIInterfaceOrientation?
-
-  override func didMoveToWindow() {
-    super.didMoveToWindow()
-    reportOrientation()
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    reportOrientation()
-  }
-
-  func reportOrientation() {
-    guard
-      let orientation = window?.windowScene?.effectiveGeometry.interfaceOrientation,
-      orientation != lastReportedOrientation
-    else { return }
-
-    lastReportedOrientation = orientation
-    DispatchQueue.main.async { [weak self] in
-      self?.onChange?(orientation)
     }
   }
 }
@@ -155,6 +82,7 @@ struct TentAudioView: View {
                   TentSentenceLine(
                     line: line,
                     isCurrent: audio.hasStartedPlayback && line.id == audio.activeLineID,
+                    spokenCharacterRange: audio.activeLineID == line.id ? audio.spokenCharacterRange : nil,
                     annotation: annotation(for: line)
                   ) {
                     selectedPassage = SelectedPassage(pageIndex: line.pageIndex, quote: line.text, range: line.range)
@@ -216,16 +144,39 @@ struct TentAudioView: View {
 private struct TentSentenceLine: View {
   var line: SpeechLine
   var isCurrent: Bool
+  var spokenCharacterRange: NSRange?
   var annotation: PassageAnnotation?
   var onSelect: () -> Void
 
+  private var displayedText: AttributedString {
+    let source = NSMutableAttributedString(string: line.text)
+    let fullRange = NSRange(location: 0, length: (line.text as NSString).length)
+    let lineColor = isCurrent ? FolioPalette.page : FolioPalette.page.opacity(0.48)
+    source.addAttribute(.foregroundColor, value: UIColor(lineColor), range: fullRange)
+
+    if isCurrent,
+      let spokenCharacterRange,
+      spokenCharacterRange.location >= 0,
+      spokenCharacterRange.length > 0,
+      NSMaxRange(spokenCharacterRange) <= fullRange.length {
+      source.addAttributes(
+        [
+          .foregroundColor: UIColor(FolioPalette.forestShade),
+          .backgroundColor: UIColor(FolioPalette.gold)
+        ],
+        range: spokenCharacterRange
+      )
+    }
+
+    return (try? AttributedString(source, including: \.uiKit)) ?? AttributedString(line.text)
+  }
+
   var body: some View {
     Button(action: onSelect) {
-      Text(line.text)
+      Text(displayedText)
         .font(.system(isCurrent ? .title3 : .body, design: .serif, weight: isCurrent ? .medium : .regular))
         .lineSpacing(5)
         .multilineTextAlignment(.center)
-        .foregroundStyle(isCurrent ? FolioPalette.page : FolioPalette.page.opacity(0.48))
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
