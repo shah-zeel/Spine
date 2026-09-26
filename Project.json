@@ -3,8 +3,11 @@
     "Debug": "debug",
     "Release": "release"
   },
-  "name": "Project",
+  "name": "Folio",
   "options": {
+    "deploymentTarget": {
+      "iOS": "26.0"
+    },
     "groupSortPosition": "bottom",
     "transitivelyLinkDependencies": false
   },
@@ -13,11 +16,10 @@
   },
   "targets": {
     "Folio": {
-      "deploymentTarget": "26.0",
       "info": {
         "path": "App/Info.plist",
         "properties": {
-          "CFBundleDisplayName": "New Project",
+          "CFBundleDisplayName": "Folio",
           "CFBundleShortVersionString": "1.0",
           "CFBundleVersion": "1",
           "ITSAppUsesNonExemptEncryption": false,
