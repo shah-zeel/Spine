@@ -15,7 +15,7 @@
     "CODE_SIGN_IDENTITY": "-"
   },
   "targets": {
-    "Folio": {
+    "Spine": {
       "info": {
         "path": "App/Info.plist",
         "properties": {
