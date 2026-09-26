@@ -1,239 +1,187 @@
 import SwiftUI
 
 struct BookReaderView: View {
-  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Binding var pageIndex: Int
   var pages: [BookPage]
+  var showsSpread: Bool
+  var notebook: ReaderNotebook
+  var audio: AudioReadingModel
 
-  @State private var turnDirection: PageTurnDirection?
-  @State private var turnProgress: CGFloat = 0
-
-  private var isShowingSpread: Bool {
-    horizontalSizeClass == .regular
-  }
+  @State private var controlsVisible = false
+  @State private var selectedPassage: SelectedPassage?
+  @State private var isShowingContents = false
+  @State private var isShowingAnnotations = false
+  @State private var editingPassage: SelectedPassage?
 
   private var safePageIndex: Int {
-    min(max(pageIndex, 0), pages.count - 1)
+    let safeIndex = min(max(pageIndex, 0), pages.count - 1)
+    return showsSpread && safeIndex.isMultiple(of: 2)
+      ? min(safeIndex + 1, pages.count - 1)
+      : safeIndex
   }
 
-  private var canTurnBackward: Bool {
-    safePageIndex >= backwardTurnDistance
-  }
-
-  private var canTurnForward: Bool {
-    safePageIndex + (isShowingSpread ? 2 : 1) < pages.count
-  }
-
-  private var pageLabel: String {
-    if isShowingSpread, safePageIndex > 0 {
-      return "\(pages[safePageIndex - 1].number)–\(pages[safePageIndex].number)"
-    }
-    return "\(pages[safePageIndex].number)"
-  }
-
-  private var progressValue: Double {
-    Double(safePageIndex) / Double(max(pages.count - 1, 1))
-  }
-
-  private var backwardTurnDistance: Int {
-    guard isShowingSpread else { return 1 }
-    return safePageIndex.isMultiple(of: 2) ? 1 : 2
-  }
+  private var turnDistance: Int { showsSpread ? 2 : 1 }
 
   var body: some View {
-    VStack(spacing: 15) {
-      readerHeader
+    GeometryReader { geometry in
+      ZStack(alignment: .bottomTrailing) {
+        FolioPalette.pageShade
+          .ignoresSafeArea()
 
-      GeometryReader { geometry in
-        PageTurnSpreadView(
+        PageCurlReaderView(
           pages: pages,
-          pageIndex: safePageIndex,
-          showsSpread: isShowingSpread,
-          direction: turnDirection,
-          progress: turnProgress
+          pageIndex: $pageIndex,
+          showsSpread: showsSpread,
+          notebook: notebook,
+          activeSpeechLine: audio.currentLine,
+          onSelectionChange: { selectedPassage = $0 }
         )
-        .contentShape(Rectangle())
-        .gesture(
-          DragGesture(minimumDistance: 12)
-            .onChanged { value in
-              updateDrag(value.translation.width, pageWidth: isShowingSpread ? geometry.size.width / 2 : geometry.size.width)
+        .id(showsSpread)
+        .simultaneousGesture(
+          TapGesture().onEnded {
+            if controlsVisible {
+              collapseControls()
             }
-            .onEnded { value in
-              endDrag(
-                value,
-                pageWidth: isShowingSpread ? geometry.size.width / 2 : geometry.size.width
-              )
-            }
+          }
         )
-        .accessibilityAction(named: Text("Previous page")) {
-          performTurn(.backward)
+        .accessibilityAction(named: Text("Previous page")) { turnPage(backward: true) }
+        .accessibilityAction(named: Text("Next page")) { turnPage(backward: false) }
+
+        if let selectedPassage {
+          PassageActionBar(
+            onHighlight: { color in
+              notebook.highlight(selectedPassage, color: color)
+            },
+            onAddNote: { editingPassage = selectedPassage },
+            onDismiss: { self.selectedPassage = nil },
+            onShowAnnotations: { isShowingAnnotations = true }
+          )
+          .frame(maxWidth: .infinity, alignment: .center)
+          .padding(.bottom, max(geometry.safeAreaInsets.bottom, 18) + 76)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
         }
-        .accessibilityAction(named: Text("Next page")) {
-          performTurn(.forward)
+
+        if controlsVisible {
+          ReaderControlDock(
+            pageIndex: safePageIndex,
+            pageCount: pages.count,
+            showsSpread: showsSpread,
+            isPlaying: audio.isPlaying,
+            onPrevious: { turnPage(backward: true) },
+            onNext: { turnPage(backward: false) },
+            onAudio: { audio.toggle(startingAtPage: safePageIndex) },
+            onContents: { isShowingContents = true },
+            onAnnotations: { isShowingAnnotations = true }
+          )
+          .padding(.trailing, 20)
+          .padding(.bottom, max(geometry.safeAreaInsets.bottom, 18) + 75)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
         }
-      }
 
-      readerFooter
-    }
-    .padding(.horizontal, horizontalSizeClass == .compact ? 18 : 34)
-    .padding(.top, 10)
-    .padding(.bottom, 12)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(FolioPalette.canvas)
-    .sensoryFeedback(.impact(weight: .light, intensity: 0.45), trigger: pageIndex)
-    .onAppear {
-      pageIndex = safePageIndex
-    }
-  }
-
-  private var readerHeader: some View {
-    HStack(alignment: .bottom, spacing: 16) {
-      VStack(alignment: .leading, spacing: 4) {
-        Text("A SAMPLE READING")
-          .font(.system(.caption2, design: .rounded, weight: .semibold))
-          .tracking(1.8)
-          .foregroundStyle(FolioPalette.mutedInk)
-
-        Text("The Wild Between")
-          .font(.system(.title2, design: .serif))
-          .foregroundStyle(FolioPalette.ink)
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-      }
-
-      Spacer(minLength: 4)
-
-      Text(pages[safePageIndex].section.components(separatedBy: " · ").first ?? "A story")
-        .font(.system(.caption, design: .rounded, weight: .medium))
-        .foregroundStyle(FolioPalette.mutedInk)
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        .padding(.bottom, 4)
-    }
-    .frame(maxWidth: 900)
-    .frame(maxWidth: .infinity, alignment: .center)
-  }
-
-  private var readerFooter: some View {
-    HStack(spacing: 15) {
-      pageButton(direction: .backward, title: "Previous page", symbol: "chevron.left")
-        .disabled(!canTurnBackward)
-
-      VStack(alignment: .leading, spacing: 7) {
-        HStack {
-          Text("Drag a page to turn")
-            .font(.system(.caption, design: .rounded))
-            .foregroundStyle(FolioPalette.mutedInk)
-
-          Spacer(minLength: 8)
-
-          Text("PAGE \(pageLabel)")
-            .font(.system(.caption2, design: .rounded, weight: .semibold))
-            .tracking(0.8)
-            .monospacedDigit()
+        Button {
+          setControlsVisible(!controlsVisible)
+        } label: {
+          Image(systemName: controlsVisible ? "xmark" : "ellipsis")
+            .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(FolioPalette.ink)
+            .frame(width: 48, height: 48)
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay(Circle().strokeBorder(FolioPalette.rule.opacity(0.55), lineWidth: 0.8))
         }
-
-        ProgressView(value: progressValue)
-          .tint(FolioPalette.accent)
-          .accessibilityLabel("Reading progress")
-          .accessibilityValue("\(Int(progressValue * 100)) percent")
+        .buttonStyle(.plain)
+        .accessibilityLabel(controlsVisible ? "Hide reader controls" : "Show reader controls")
+        .padding(.trailing, 20)
+        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 18) + 14)
       }
-
-      pageButton(direction: .forward, title: "Next page", symbol: "chevron.right")
-        .disabled(!canTurnForward)
+      .frame(width: geometry.size.width, height: geometry.size.height)
+      .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: controlsVisible)
+      .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: selectedPassage)
     }
-    .frame(maxWidth: 900)
-    .frame(maxWidth: .infinity, alignment: .center)
+    .ignoresSafeArea()
+    .onAppear { pageIndex = safePageIndex }
+    .onChange(of: pageIndex) { _, _ in selectedPassage = nil }
+    .sensoryFeedback(.impact(weight: .light, intensity: 0.45), trigger: pageIndex)
+    .sheet(isPresented: $isShowingContents) {
+      TableOfContentsView { pageIndex = $0 }
+    }
+    .sheet(isPresented: $isShowingAnnotations) {
+      AnnotationLibraryView(notebook: notebook)
+    }
+    .sheet(item: $editingPassage) { passage in
+      AnnotationEditorView(
+        notebook: notebook,
+        passage: passage,
+        existing: notebook.annotation(for: passage)
+      )
+    }
+    .task(id: controlsVisible) {
+      guard controlsVisible else { return }
+      try? await Task.sleep(for: .seconds(4))
+      guard !Task.isCancelled else { return }
+      collapseControls()
+    }
   }
 
-  private func pageButton(direction: PageTurnDirection, title: String, symbol: String) -> some View {
-    Button {
-      performTurn(direction)
-    } label: {
-      Label(title, systemImage: symbol)
-        .labelStyle(.iconOnly)
-        .font(.system(size: 14, weight: .semibold))
+  private func turnPage(backward: Bool) {
+    let target = safePageIndex + (backward ? -turnDistance : turnDistance)
+    pageIndex = min(max(target, 0), pages.count - 1)
+  }
+
+  private func setControlsVisible(_ visible: Bool) {
+    if reduceMotion {
+      controlsVisible = visible
+    } else {
+      withAnimation(.smooth(duration: 0.22)) {
+        controlsVisible = visible
+      }
+    }
+  }
+
+  private func collapseControls() {
+    guard controlsVisible else { return }
+    setControlsVisible(false)
+  }
+}
+
+private struct ReaderControlDock: View {
+  var pageIndex: Int
+  var pageCount: Int
+  var showsSpread: Bool
+  var isPlaying: Bool
+  var onPrevious: () -> Void
+  var onNext: () -> Void
+  var onAudio: () -> Void
+  var onContents: () -> Void
+  var onAnnotations: () -> Void
+
+  private var step: Int { showsSpread ? 2 : 1 }
+
+  var body: some View {
+    HStack(spacing: 4) {
+      dockButton("Previous page", symbol: "chevron.left", action: onPrevious)
+        .disabled(pageIndex < step)
+      dockButton(isPlaying ? "Pause audiobook" : "Play audiobook", symbol: isPlaying ? "pause.fill" : "play.fill", action: onAudio)
+      dockButton("Contents", symbol: "list.bullet", action: onContents)
+      dockButton("Annotations", symbol: "quote.bubble", action: onAnnotations)
+      dockButton("Next page", symbol: "chevron.right", action: onNext)
+        .disabled(pageIndex + step >= pageCount)
+    }
+    .padding(6)
+    .background(.regularMaterial, in: Capsule())
+    .overlay(Capsule().strokeBorder(FolioPalette.rule.opacity(0.54), lineWidth: 0.8))
+    .shadow(color: FolioPalette.ink.opacity(0.16), radius: 14, y: 6)
+  }
+
+  private func dockButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+      Image(systemName: symbol)
+        .font(.system(size: 15, weight: .semibold))
         .foregroundStyle(FolioPalette.ink)
-        .frame(width: 46, height: 46)
-        .background(Circle().fill(FolioPalette.page.opacity(0.88)))
-        .overlay(Circle().strokeBorder(FolioPalette.rule.opacity(0.7), lineWidth: 1))
+        .frame(width: 42, height: 42)
+        .contentShape(Circle())
     }
     .buttonStyle(.plain)
     .accessibilityLabel(title)
-  }
-
-  private func updateDrag(_ translation: CGFloat, pageWidth: CGFloat) {
-    guard abs(translation) > 4 else { return }
-
-    let direction: PageTurnDirection = translation < 0 ? .forward : .backward
-    guard canTurn(direction) else {
-      turnDirection = nil
-      turnProgress = 0
-      return
-    }
-
-    turnDirection = direction
-    turnProgress = min(abs(translation) / max(pageWidth, 1), 1)
-  }
-
-  private func endDrag(_ value: DragGesture.Value, pageWidth: CGFloat) {
-    guard let direction = turnDirection else { return }
-
-    let predictedProgress = min(abs(value.predictedEndTranslation.width) / max(pageWidth, 1), 1)
-    let projectedInSameDirection = direction == .forward
-      ? value.predictedEndTranslation.width < 0
-      : value.predictedEndTranslation.width > 0
-    if turnProgress > 0.16 || (projectedInSameDirection && predictedProgress > 0.34) {
-      animateTurnToCompletion(direction)
-    } else {
-      cancelTurn()
-    }
-  }
-
-  private func canTurn(_ direction: PageTurnDirection) -> Bool {
-    direction == .forward ? canTurnForward : canTurnBackward
-  }
-
-  private func performTurn(_ direction: PageTurnDirection) {
-    guard turnDirection == nil, canTurn(direction) else { return }
-    turnDirection = direction
-    animateTurnToCompletion(direction)
-  }
-
-  private func animateTurnToCompletion(_ direction: PageTurnDirection) {
-    if reduceMotion {
-      finishTurn(direction)
-    } else {
-      withAnimation(.spring(duration: 0.42, bounce: 0.05)) {
-        turnProgress = 1
-      } completion: {
-        finishTurn(direction)
-      }
-    }
-  }
-
-  private func cancelTurn() {
-    if reduceMotion {
-      turnProgress = 0
-      turnDirection = nil
-    } else {
-      withAnimation(.spring(duration: 0.28, bounce: 0.02)) {
-        turnProgress = 0
-      } completion: {
-        turnDirection = nil
-      }
-    }
-  }
-
-  private func finishTurn(_ direction: PageTurnDirection) {
-    if direction == .forward {
-      pageIndex += isShowingSpread ? 2 : 1
-    } else {
-      pageIndex -= backwardTurnDistance
-    }
-    turnProgress = 0
-    turnDirection = nil
   }
 }

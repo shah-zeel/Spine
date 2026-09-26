@@ -1,207 +1,144 @@
 import SwiftUI
 
 struct BookCoverView: View {
-  var progress: Double
-  var onContinue: () -> Void
+  @Bindable var audio: AudioReadingModel
+  var startingPage: Int = 1
 
   var body: some View {
     GeometryReader { geometry in
-      let isLandscape = geometry.size.width > geometry.size.height
-      let coverHeight = isLandscape
-        ? min(geometry.size.height * 0.76, 320)
-        : min(geometry.size.height * 0.52, 405)
+      ZStack(alignment: .bottom) {
+        BookCoverArtwork()
+          .frame(width: geometry.size.width, height: geometry.size.height)
+          .ignoresSafeArea()
 
-      ZStack {
-        FolioPalette.canvas.ignoresSafeArea()
-
-        RadialGradient(
-          colors: [FolioPalette.page.opacity(0.55), FolioPalette.canvas.opacity(0.1)],
-          center: .init(x: 0.5, y: 0.44),
-          startRadius: 20,
-          endRadius: max(geometry.size.width, geometry.size.height) * 0.72
-        )
-        .ignoresSafeArea()
-
-        if isLandscape {
-          HStack(spacing: min(geometry.size.width * 0.07, 54)) {
-            BookCoverArtwork()
-              .frame(width: coverHeight * 0.68, height: coverHeight)
-
-            coverDetails
-              .frame(maxWidth: 310, alignment: .leading)
-          }
-          .frame(maxWidth: 760, maxHeight: .infinity)
-          .padding(.horizontal, 28)
-        } else {
-          VStack(spacing: 20) {
-            Spacer(minLength: 8)
-
-            BookCoverArtwork()
-              .frame(width: coverHeight * 0.68, height: coverHeight)
-
-            Text("A quiet story about finding your way home.")
-              .font(.system(.subheadline, design: .serif))
-              .foregroundStyle(FolioPalette.mutedInk)
-              .multilineTextAlignment(.center)
-              .padding(.horizontal, 36)
-
-            continueButton
-
-            Spacer(minLength: 8)
-          }
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .padding(.horizontal, 20)
+        Button {
+          audio.toggle(startingAtPage: startingPage)
+        } label: {
+          Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.94))
+            .frame(width: 48, height: 48)
+            .background(.ultraThinMaterial.opacity(0.82), in: Circle())
+            .overlay(Circle().strokeBorder(.white.opacity(0.20), lineWidth: 0.8))
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(audio.isPlaying ? "Pause audiobook" : "Play audiobook")
+        .accessibilityHint("Reads The Wild Between aloud")
+        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 22) + 15)
       }
+      .frame(width: geometry.size.width, height: geometry.size.height)
     }
-  }
-
-  private var coverDetails: some View {
-    VStack(alignment: .leading, spacing: 15) {
-      Text("YOUR PLACE IN THE STORY")
-        .font(.system(.caption2, design: .rounded, weight: .semibold))
-        .tracking(1.7)
-        .foregroundStyle(FolioPalette.mutedInk)
-
-      Text("The Wild Between")
-        .font(.system(.largeTitle, design: .serif))
-        .foregroundStyle(FolioPalette.ink)
-
-      Text("Mira Sol  ·  Sample edition")
-        .font(.system(.subheadline, design: .rounded))
-        .foregroundStyle(FolioPalette.mutedInk)
-
-      ProgressView(value: progress)
-        .tint(FolioPalette.accent)
-        .padding(.top, 6)
-        .accessibilityLabel("Reading progress")
-        .accessibilityValue("\(Int(progress * 100)) percent")
-
-      continueButton
-        .padding(.top, 8)
-    }
-  }
-
-  private var continueButton: some View {
-    Button(action: onContinue) {
-      Label("Continue reading", systemImage: "book.closed.fill")
-        .font(.system(.headline, design: .rounded))
-        .foregroundStyle(FolioPalette.page)
-        .padding(.horizontal, 23)
-        .frame(minHeight: 54)
-        .background(Capsule().fill(FolioPalette.forest))
-    }
-    .buttonStyle(.plain)
-    .accessibilityHint("Opens the book at your last page")
+    .ignoresSafeArea()
+    .accessibilityElement(children: .contain)
   }
 }
 
-private struct BookCoverArtwork: View {
+struct BookCoverArtwork: View {
   var body: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: 6, style: .continuous)
-        .fill(FolioPalette.forest)
-
-      Canvas { context, size in
-        let sun = CGRect(
-          x: size.width * 0.59,
-          y: size.height * 0.30,
-          width: size.width * 0.26,
-          height: size.width * 0.26
+    GeometryReader { geometry in
+      let size = geometry.size
+      ZStack {
+        LinearGradient(
+          colors: [Color(red: 0.12, green: 0.27, blue: 0.23), FolioPalette.forestShade],
+          startPoint: .top,
+          endPoint: .bottom
         )
-        context.fill(Path(ellipseIn: sun), with: .color(FolioPalette.gold.opacity(0.78)))
 
-        var farHills = Path()
-        farHills.move(to: CGPoint(x: 0, y: size.height * 0.62))
-        farHills.addCurve(
-          to: CGPoint(x: size.width, y: size.height * 0.62),
-          control1: CGPoint(x: size.width * 0.30, y: size.height * 0.46),
-          control2: CGPoint(x: size.width * 0.60, y: size.height * 0.69)
-        )
-        farHills.addLine(to: CGPoint(x: size.width, y: size.height))
-        farHills.addLine(to: CGPoint(x: 0, y: size.height))
-        farHills.closeSubpath()
-        context.fill(farHills, with: .color(Color(red: 0.16, green: 0.31, blue: 0.25)))
+        Canvas { context, canvasSize in
+          let sunDiameter = min(canvasSize.width, canvasSize.height) * 0.40
+          let sun = CGRect(
+            x: canvasSize.width * 0.5 - sunDiameter / 2,
+            y: canvasSize.height * 0.30 - sunDiameter / 2,
+            width: sunDiameter,
+            height: sunDiameter
+          )
+          context.fill(Path(ellipseIn: sun), with: .color(FolioPalette.gold.opacity(0.82)))
 
-        var nearHills = Path()
-        nearHills.move(to: CGPoint(x: 0, y: size.height * 0.80))
-        nearHills.addCurve(
-          to: CGPoint(x: size.width, y: size.height * 0.70),
-          control1: CGPoint(x: size.width * 0.32, y: size.height * 0.66),
-          control2: CGPoint(x: size.width * 0.72, y: size.height * 0.90)
-        )
-        nearHills.addLine(to: CGPoint(x: size.width, y: size.height))
-        nearHills.addLine(to: CGPoint(x: 0, y: size.height))
-        nearHills.closeSubpath()
-        context.fill(nearHills, with: .color(FolioPalette.forestShade))
+          for star in [
+            CGPoint(x: 0.15, y: 0.14), CGPoint(x: 0.30, y: 0.23), CGPoint(x: 0.75, y: 0.13),
+            CGPoint(x: 0.86, y: 0.26), CGPoint(x: 0.65, y: 0.19), CGPoint(x: 0.42, y: 0.11)
+          ] {
+            let dot = CGRect(x: canvasSize.width * star.x, y: canvasSize.height * star.y, width: 2, height: 2)
+            context.fill(Path(ellipseIn: dot), with: .color(FolioPalette.page.opacity(0.78)))
+          }
 
-        for tree in [
-          (CGFloat(0.12), CGFloat(0.76), CGFloat(0.25)),
-          (CGFloat(0.23), CGFloat(0.79), CGFloat(0.18)),
-          (CGFloat(0.82), CGFloat(0.73), CGFloat(0.28)),
-          (CGFloat(0.91), CGFloat(0.79), CGFloat(0.20))
-        ] {
-          let centerX = size.width * tree.0
-          let baseY = size.height * tree.1
-          let treeHeight = size.height * tree.2
-          var silhouette = Path()
-          silhouette.move(to: CGPoint(x: centerX, y: baseY - treeHeight))
-          silhouette.addLine(to: CGPoint(x: centerX - treeHeight * 0.30, y: baseY))
-          silhouette.addLine(to: CGPoint(x: centerX + treeHeight * 0.30, y: baseY))
-          silhouette.closeSubpath()
-          context.fill(silhouette, with: .color(FolioPalette.forestShade.opacity(0.9)))
+          var distantHill = Path()
+          distantHill.move(to: CGPoint(x: 0, y: canvasSize.height * 0.62))
+          distantHill.addCurve(
+            to: CGPoint(x: canvasSize.width, y: canvasSize.height * 0.63),
+            control1: CGPoint(x: canvasSize.width * 0.28, y: canvasSize.height * 0.48),
+            control2: CGPoint(x: canvasSize.width * 0.72, y: canvasSize.height * 0.74)
+          )
+          distantHill.addLine(to: CGPoint(x: canvasSize.width, y: canvasSize.height))
+          distantHill.addLine(to: CGPoint(x: 0, y: canvasSize.height))
+          distantHill.closeSubpath()
+          context.fill(distantHill, with: .color(Color(red: 0.16, green: 0.33, blue: 0.27)))
+
+          var nearHill = Path()
+          nearHill.move(to: CGPoint(x: 0, y: canvasSize.height * 0.82))
+          nearHill.addCurve(
+            to: CGPoint(x: canvasSize.width, y: canvasSize.height * 0.74),
+            control1: CGPoint(x: canvasSize.width * 0.30, y: canvasSize.height * 0.68),
+            control2: CGPoint(x: canvasSize.width * 0.72, y: canvasSize.height * 0.93)
+          )
+          nearHill.addLine(to: CGPoint(x: canvasSize.width, y: canvasSize.height))
+          nearHill.addLine(to: CGPoint(x: 0, y: canvasSize.height))
+          nearHill.closeSubpath()
+          context.fill(nearHill, with: .color(FolioPalette.forestShade))
+
+          for tree in [(0.12, 0.82, 0.21), (0.23, 0.84, 0.15), (0.79, 0.77, 0.25), (0.90, 0.83, 0.18)] {
+            let center = CGPoint(x: canvasSize.width * tree.0, y: canvasSize.height * tree.1)
+            let height = canvasSize.height * tree.2
+            var silhouette = Path()
+            silhouette.move(to: CGPoint(x: center.x, y: center.y - height))
+            silhouette.addLine(to: CGPoint(x: center.x - height * 0.3, y: center.y))
+            silhouette.addLine(to: CGPoint(x: center.x + height * 0.3, y: center.y))
+            silhouette.closeSubpath()
+            context.fill(silhouette, with: .color(Color(red: 0.04, green: 0.12, blue: 0.11)))
+          }
         }
-      }
 
-      VStack(spacing: 0) {
-        Text("F O L I O")
-          .font(.system(size: 8, weight: .medium, design: .rounded))
-          .tracking(1.2)
-          .foregroundStyle(FolioPalette.gold.opacity(0.95))
-          .padding(.top, 27)
+        VStack(spacing: 0) {
+          Text("F O L I O")
+            .font(.system(size: min(size.width * 0.025, 13), weight: .medium, design: .rounded))
+            .tracking(2.2)
+            .foregroundStyle(FolioPalette.gold)
+            .padding(.top, size.height * 0.11)
 
-        Spacer(minLength: 14)
+          Spacer(minLength: 20)
 
-        VStack(spacing: 2) {
-          Text("THE WILD")
-          Text("BETWEEN")
-        }
-        .font(.system(size: 27, weight: .regular, design: .serif))
-        .tracking(1.7)
-        .foregroundStyle(FolioPalette.page)
-        .shadow(color: FolioPalette.forestShade.opacity(0.5), radius: 9, y: 2)
-
-        Text("A NOVEL")
-          .font(.system(size: 8, weight: .medium, design: .rounded))
+          VStack(spacing: 3) {
+            Text("THE WILD")
+            Text("BETWEEN")
+          }
+          .font(.system(size: min(size.width * 0.092, 46), weight: .regular, design: .serif))
           .tracking(2.2)
-          .foregroundStyle(FolioPalette.gold)
-          .padding(.top, 11)
+          .foregroundStyle(FolioPalette.page)
+          .shadow(color: FolioPalette.forestShade.opacity(0.7), radius: 10, y: 3)
 
-        Spacer(minLength: 12)
+          Text("A NOVEL")
+            .font(.system(size: min(size.width * 0.022, 11), weight: .medium, design: .rounded))
+            .tracking(3.2)
+            .foregroundStyle(FolioPalette.gold)
+            .padding(.top, 12)
 
-        Rectangle()
-          .fill(FolioPalette.gold.opacity(0.75))
-          .frame(width: 34, height: 1)
-          .padding(.bottom, 12)
+          Spacer(minLength: 20)
 
-        Text("M I R A   S O L")
-          .font(.system(size: 8, weight: .medium, design: .rounded))
-          .foregroundStyle(FolioPalette.page.opacity(0.88))
-          .padding(.bottom, 27)
+          Rectangle()
+            .fill(FolioPalette.gold.opacity(0.76))
+            .frame(width: min(size.width * 0.10, 40), height: 1)
+            .padding(.bottom, 12)
+
+          Text("M I R A   S O L")
+            .font(.system(size: min(size.width * 0.021, 10), weight: .medium, design: .rounded))
+            .foregroundStyle(FolioPalette.page.opacity(0.88))
+            .padding(.bottom, max(size.height * 0.16, 76))
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 28)
       }
-
-      RoundedRectangle(cornerRadius: 4, style: .continuous)
-        .strokeBorder(FolioPalette.gold.opacity(0.56), lineWidth: 0.8)
-        .padding(10)
+      .frame(width: size.width, height: size.height)
     }
-    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-    .overlay(alignment: .leading) {
-      Rectangle()
-        .fill(LinearGradient(colors: [FolioPalette.forestShade, FolioPalette.forest.opacity(0.1)], startPoint: .leading, endPoint: .trailing))
-        .frame(width: 8)
-        .padding(.vertical, 5)
-    }
-    .shadow(color: FolioPalette.ink.opacity(0.23), radius: 18, x: 8, y: 14)
-    .accessibilityLabel("Cover of The Wild Between by Mira Sol")
+    .accessibilityLabel("The Wild Between, a novel by Mira Sol")
   }
 }
