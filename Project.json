@@ -12,10 +12,10 @@
     "CODE_SIGN_IDENTITY": "-"
   },
   "targets": {
-    "New Project": {
+    "Folio": {
       "deploymentTarget": "26.0",
       "info": {
-        "path": "App\/Info.plist",
+        "path": "App/Info.plist",
         "properties": {
           "CFBundleDisplayName": "New Project",
           "CFBundleShortVersionString": "1.0",
