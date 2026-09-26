@@ -5,34 +5,162 @@ struct BookCoverView: View {
   var startingPage: Int = 1
 
   var body: some View {
+    BookCoverReadingLayout(audio: audio, startingPage: startingPage, showsPlayControl: true)
+      .accessibilityElement(children: .contain)
+  }
+}
+
+struct BookCoverReadingLayout: View {
+  var audio: AudioReadingModel
+  var startingPage: Int
+  var showsPlayControl: Bool
+
+  var body: some View {
+    GeometryReader { geometry in
+      if geometry.size.width > geometry.size.height {
+        HStack(spacing: 0) {
+          BookCoverPane(audio: audio, startingPage: startingPage, showsPlayControl: showsPlayControl)
+            .frame(width: geometry.size.width * 0.52)
+
+          LiveReadingLinesPane(audio: audio, startingPage: startingPage)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+      } else {
+        VStack(spacing: 0) {
+          BookCoverPane(audio: audio, startingPage: startingPage, showsPlayControl: showsPlayControl)
+            .frame(height: geometry.size.height * 0.56)
+
+          LiveReadingLinesPane(audio: audio, startingPage: startingPage)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+      }
+    }
+    .ignoresSafeArea()
+  }
+}
+
+private struct BookCoverPane: View {
+  var audio: AudioReadingModel
+  var startingPage: Int
+  var showsPlayControl: Bool
+
+  var body: some View {
     GeometryReader { geometry in
       ZStack(alignment: .bottom) {
         BookCoverArtwork()
           .frame(width: geometry.size.width, height: geometry.size.height)
-          .ignoresSafeArea()
 
-        LiveReadingCaptionOverlay(audio: audio)
-          .allowsHitTesting(false)
-
-        Button {
-          audio.toggle(startingAtPage: startingPage)
-        } label: {
-          Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.94))
-            .frame(width: 48, height: 48)
-            .background(.ultraThinMaterial.opacity(0.82), in: Circle())
-            .overlay(Circle().strokeBorder(.white.opacity(0.20), lineWidth: 0.8))
+        if showsPlayControl {
+          Button {
+            audio.toggle(startingAtPage: startingPage)
+          } label: {
+            Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
+              .font(.system(size: 15, weight: .semibold))
+              .foregroundStyle(.white.opacity(0.94))
+              .frame(width: 48, height: 48)
+              .background(.ultraThinMaterial.opacity(0.82), in: Circle())
+              .overlay(Circle().strokeBorder(.white.opacity(0.20), lineWidth: 0.8))
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(audio.isPlaying ? "Pause audiobook" : "Play audiobook")
+          .accessibilityHint("Reads The Wild Between aloud")
+          .padding(.bottom, max(geometry.safeAreaInsets.bottom, 22) + 15)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(audio.isPlaying ? "Pause audiobook" : "Play audiobook")
-        .accessibilityHint("Reads The Wild Between aloud")
-        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 22) + 15)
       }
       .frame(width: geometry.size.width, height: geometry.size.height)
     }
-    .ignoresSafeArea()
-    .accessibilityElement(children: .contain)
+  }
+}
+
+private struct LiveReadingLinesPane: View {
+  var audio: AudioReadingModel
+  var startingPage: Int
+
+  private var focusIndex: Int {
+    if audio.hasStartedPlayback {
+      return min(max(audio.currentLineIndex, 0), max(audio.lines.count - 1, 0))
+    }
+    return audio.lines.firstIndex(where: { $0.pageIndex >= startingPage }) ?? 0
+  }
+
+  private var visibleLines: [SpeechLine] {
+    guard !audio.lines.isEmpty else { return [] }
+    let center = min(max(focusIndex, 0), audio.lines.count - 1)
+    let lowerBound = max(center - 1, 0)
+    let upperBound = min(center + 2, audio.lines.count)
+    return Array(audio.lines[lowerBound..<upperBound])
+  }
+
+  private var focusLineID: String? {
+    audio.lines.indices.contains(focusIndex) ? audio.lines[focusIndex].id : nil
+  }
+
+  var body: some View {
+    GeometryReader { geometry in
+      ZStack {
+        LinearGradient(
+          colors: [FolioPalette.forest, FolioPalette.forestShade],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+
+        VStack(alignment: .leading, spacing: 0) {
+          VStack(alignment: .leading, spacing: 7) {
+            Text("FOLLOW ALONG")
+              .font(.system(.caption2, design: .rounded, weight: .semibold))
+              .tracking(1.8)
+              .foregroundStyle(FolioPalette.gold.opacity(0.9))
+
+            Text(audio.isPlaying ? "READING NOW" : audio.hasStartedPlayback ? "PAUSED" : "READY TO READ")
+              .font(.system(.caption, design: .rounded, weight: .medium))
+              .tracking(1.2)
+              .foregroundStyle(FolioPalette.page.opacity(0.60))
+          }
+          .padding(.bottom, 22)
+
+          ScrollViewReader { proxy in
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 16) {
+                ForEach(visibleLines) { line in
+                  let isCurrent = line.id == focusLineID
+
+                  SpeechSynchronizedText(
+                    line: line,
+                    spokenCharacterRange: audio.hasStartedPlayback && isCurrent ? audio.spokenCharacterRange : nil,
+                    textColor: isCurrent ? FolioPalette.page : FolioPalette.page.opacity(0.42),
+                    spokenTextColor: FolioPalette.gold,
+                    spokenBackgroundColor: FolioPalette.gold.opacity(0.16)
+                  )
+                  .font(.system(isCurrent ? .title3 : .body, design: .serif, weight: isCurrent ? .medium : .regular))
+                  .lineSpacing(5)
+                  .multilineTextAlignment(.leading)
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .id(line.id)
+                }
+              }
+              .padding(.vertical, 8)
+            }
+            .scrollIndicators(.hidden)
+            .onChange(of: focusLineID) { _, lineID in
+              guard audio.hasStartedPlayback, let lineID else { return }
+              withAnimation(.smooth(duration: 0.35)) {
+                proxy.scrollTo(lineID, anchor: .center)
+              }
+            }
+            .task(id: focusLineID) {
+              guard let focusLineID else { return }
+              await Task.yield()
+              proxy.scrollTo(focusLineID, anchor: .center)
+            }
+          }
+          .frame(maxHeight: .infinity)
+        }
+        .padding(.horizontal, min(max(geometry.size.width * 0.08, 24), 56))
+        .padding(.vertical, max(geometry.safeAreaInsets.top, 28))
+      }
+      .frame(width: geometry.size.width, height: geometry.size.height)
+    }
+    .accessibilityLabel("Audiobook text, synchronized with playback")
   }
 }
 

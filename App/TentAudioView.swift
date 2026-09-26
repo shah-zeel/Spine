@@ -8,14 +8,11 @@ struct TentPostureView: View {
   var body: some View {
     if #available(iOS 27.1, *) {
       ArrangementView {
-        ZStack {
-          BookCoverArtwork()
-            .overlay(FolioPalette.forestShade.opacity(0.28))
-            .accessibilityHidden(true)
-
-          LiveReadingCaptionOverlay(audio: audio)
-            .allowsHitTesting(false)
-        }
+        BookCoverReadingLayout(
+          audio: audio,
+          startingPage: audio.currentLine?.pageIndex ?? 0,
+          showsPlayControl: false
+        )
       } secondary: {
         TentAudioView(audio: audio, notebook: notebook)
           .rotationEffect(.degrees(180))
@@ -182,58 +179,6 @@ private struct TentSentenceLine: View {
     .buttonStyle(.plain)
     .accessibilityLabel("Select passage: \(line.text)")
     .accessibilityHint("Opens highlight and note actions for this sentence")
-  }
-}
-
-struct LiveReadingCaptionOverlay: View {
-  var audio: AudioReadingModel
-
-  var body: some View {
-    GeometryReader { geometry in
-      if audio.hasStartedPlayback, let line = audio.currentLine {
-        HStack(alignment: .top, spacing: 11) {
-          Capsule()
-            .fill(FolioPalette.gold)
-            .frame(width: 3)
-
-          VStack(alignment: .leading, spacing: 10) {
-            Text(audio.isPlaying ? "READING NOW" : "PAUSED")
-              .font(.system(.caption2, design: .rounded, weight: .semibold))
-              .tracking(1.4)
-              .foregroundStyle(FolioPalette.gold)
-
-            SpeechSynchronizedText(
-              line: line,
-              spokenCharacterRange: audio.spokenCharacterRange,
-              textColor: FolioPalette.page,
-              spokenTextColor: FolioPalette.forestShade,
-              spokenBackgroundColor: FolioPalette.gold
-            )
-            .font(.system(.title3, design: .serif, weight: .medium))
-            .lineSpacing(4)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(16)
-        .frame(width: min(max(geometry.size.width * 0.32, 180), 350), alignment: .leading)
-        .background {
-          RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(FolioPalette.forestShade.opacity(0.94))
-        }
-        .overlay {
-          RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .strokeBorder(.white.opacity(0.14), lineWidth: 0.8)
-        }
-        .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .padding(.trailing, max(geometry.safeAreaInsets.trailing, 16) + 24)
-        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 16) + 84)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(audio.isPlaying ? "Now reading" : "Paused on"): \(line.text)")
-      }
-    }
   }
 }
 
