@@ -11,6 +11,9 @@ struct BookCoverView: View {
           .frame(width: geometry.size.width, height: geometry.size.height)
           .ignoresSafeArea()
 
+        LiveReadingCaptionOverlay(audio: audio)
+          .allowsHitTesting(false)
+
         Button {
           audio.toggle(startingAtPage: startingPage)
         } label: {

@@ -8,9 +8,14 @@ struct TentPostureView: View {
   var body: some View {
     if #available(iOS 27.1, *) {
       ArrangementView {
-        BookCoverArtwork()
-          .overlay(FolioPalette.forestShade.opacity(0.28))
-          .accessibilityHidden(true)
+        ZStack {
+          BookCoverArtwork()
+            .overlay(FolioPalette.forestShade.opacity(0.28))
+            .accessibilityHidden(true)
+
+          LiveReadingCaptionOverlay(audio: audio)
+            .allowsHitTesting(false)
+        }
       } secondary: {
         TentAudioView(audio: audio, notebook: notebook)
           .rotationEffect(.degrees(180))
@@ -148,32 +153,15 @@ private struct TentSentenceLine: View {
   var annotation: PassageAnnotation?
   var onSelect: () -> Void
 
-  private var displayedText: AttributedString {
-    let source = NSMutableAttributedString(string: line.text)
-    let fullRange = NSRange(location: 0, length: (line.text as NSString).length)
-    let lineColor = isCurrent ? FolioPalette.page : FolioPalette.page.opacity(0.48)
-    source.addAttribute(.foregroundColor, value: UIColor(lineColor), range: fullRange)
-
-    if isCurrent,
-      let spokenCharacterRange,
-      spokenCharacterRange.location >= 0,
-      spokenCharacterRange.length > 0,
-      NSMaxRange(spokenCharacterRange) <= fullRange.length {
-      source.addAttributes(
-        [
-          .foregroundColor: UIColor(FolioPalette.forestShade),
-          .backgroundColor: UIColor(FolioPalette.gold)
-        ],
-        range: spokenCharacterRange
-      )
-    }
-
-    return (try? AttributedString(source, including: \.uiKit)) ?? AttributedString(line.text)
-  }
-
   var body: some View {
     Button(action: onSelect) {
-      Text(displayedText)
+      SpeechSynchronizedText(
+        line: line,
+        spokenCharacterRange: isCurrent ? spokenCharacterRange : nil,
+        textColor: isCurrent ? FolioPalette.page : FolioPalette.page.opacity(0.48),
+        spokenTextColor: FolioPalette.forestShade,
+        spokenBackgroundColor: FolioPalette.gold
+      )
         .font(.system(isCurrent ? .title3 : .body, design: .serif, weight: isCurrent ? .medium : .regular))
         .lineSpacing(5)
         .multilineTextAlignment(.center)
@@ -194,5 +182,90 @@ private struct TentSentenceLine: View {
     .buttonStyle(.plain)
     .accessibilityLabel("Select passage: \(line.text)")
     .accessibilityHint("Opens highlight and note actions for this sentence")
+  }
+}
+
+struct LiveReadingCaptionOverlay: View {
+  var audio: AudioReadingModel
+
+  var body: some View {
+    GeometryReader { geometry in
+      if audio.hasStartedPlayback, let line = audio.currentLine {
+        HStack(alignment: .top, spacing: 11) {
+          Capsule()
+            .fill(FolioPalette.gold)
+            .frame(width: 3)
+
+          VStack(alignment: .leading, spacing: 10) {
+            Text(audio.isPlaying ? "READING NOW" : "PAUSED")
+              .font(.system(.caption2, design: .rounded, weight: .semibold))
+              .tracking(1.4)
+              .foregroundStyle(FolioPalette.gold)
+
+            SpeechSynchronizedText(
+              line: line,
+              spokenCharacterRange: audio.spokenCharacterRange,
+              textColor: FolioPalette.page,
+              spokenTextColor: FolioPalette.forestShade,
+              spokenBackgroundColor: FolioPalette.gold
+            )
+            .font(.system(.title3, design: .serif, weight: .medium))
+            .lineSpacing(4)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .frame(width: min(max(geometry.size.width * 0.32, 180), 350), alignment: .leading)
+        .background {
+          RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(FolioPalette.forestShade.opacity(0.94))
+        }
+        .overlay {
+          RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(.white.opacity(0.14), lineWidth: 0.8)
+        }
+        .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(.trailing, max(geometry.safeAreaInsets.trailing, 16) + 24)
+        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 16) + 84)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(audio.isPlaying ? "Now reading" : "Paused on"): \(line.text)")
+      }
+    }
+  }
+}
+
+struct SpeechSynchronizedText: View {
+  var line: SpeechLine
+  var spokenCharacterRange: NSRange?
+  var textColor: Color
+  var spokenTextColor: Color
+  var spokenBackgroundColor: Color
+
+  private var attributedText: AttributedString {
+    let source = NSMutableAttributedString(string: line.text)
+    let fullRange = NSRange(location: 0, length: (line.text as NSString).length)
+    source.addAttribute(.foregroundColor, value: UIColor(textColor), range: fullRange)
+
+    if let spokenCharacterRange,
+      spokenCharacterRange.location >= 0,
+      spokenCharacterRange.length > 0,
+      NSMaxRange(spokenCharacterRange) <= fullRange.length {
+      source.addAttributes(
+        [
+          .foregroundColor: UIColor(spokenTextColor),
+          .backgroundColor: UIColor(spokenBackgroundColor)
+        ],
+        range: spokenCharacterRange
+      )
+    }
+
+    return (try? AttributedString(source, including: \.uiKit)) ?? AttributedString(line.text)
+  }
+
+  var body: some View {
+    Text(attributedText)
   }
 }
