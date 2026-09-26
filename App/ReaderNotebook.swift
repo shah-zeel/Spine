@@ -69,7 +69,8 @@ final class ReaderNotebook {
       let decoded = try? JSONDecoder().decode([PassageAnnotation].self, from: data) {
       annotations = decoded
     } else {
-      annotations = []
+      annotations = Self.demoAnnotations(in: SampleBook.pages)
+      if !annotations.isEmpty { persist() }
     }
   }
 
@@ -138,6 +139,60 @@ final class ReaderNotebook {
       createdAt: .now,
       updatedAt: .now
     )
+  }
+
+  private static func demoAnnotations(in pages: [BookPage]) -> [PassageAnnotation] {
+    let examples: [(pageNumber: Int, quote: String, color: PassageColor, hasHighlight: Bool, comment: String)] = [
+      (
+        pageNumber: 2,
+        quote: "Mara had not seen it since she was nine, but she knew the door at once.",
+        color: .honey,
+        hasHighlight: true,
+        comment: ""
+      ),
+      (
+        pageNumber: 5,
+        quote: "The sight made the distance feel kind instead of large.",
+        color: .rose,
+        hasHighlight: false,
+        comment: "Mara's return feels less lonely once home starts to seem close and welcoming."
+      ),
+      (
+        pageNumber: 7,
+        quote: "The map started to look less like a place and more like a way of paying attention.",
+        color: .sage,
+        hasHighlight: true,
+        comment: ""
+      ),
+      (
+        pageNumber: 12,
+        quote: "Tonight, it was enough to be here.",
+        color: .honey,
+        hasHighlight: false,
+        comment: "Returning can be a beginning on its own."
+      )
+    ]
+
+    return examples.compactMap { example in
+      guard let pageIndex = pages.firstIndex(where: { $0.number == example.pageNumber }),
+        let quoteRange = pages[pageIndex].content.range(of: example.quote) else {
+        return nil
+      }
+
+      let storedRange = NSRange(quoteRange, in: pages[pageIndex].content)
+      return PassageAnnotation(
+        id: UUID(),
+        pageIndex: pageIndex,
+        quote: example.quote,
+        location: storedRange.location,
+        length: storedRange.length,
+        color: example.color,
+        hasHighlight: example.hasHighlight,
+        comment: example.comment,
+        createdAt: .now,
+        updatedAt: .now
+      )
+    }
   }
 
   private func store(_ annotation: PassageAnnotation) {
