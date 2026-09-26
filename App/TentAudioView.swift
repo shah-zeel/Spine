@@ -1,23 +1,97 @@
 import SwiftUI
+import UIKit
 
 struct TentPostureView: View {
   var audio: AudioReadingModel
   var notebook: ReaderNotebook
 
+  @State private var firstInterfaceOrientation: UIInterfaceOrientation?
+  @State private var currentInterfaceOrientation: UIInterfaceOrientation?
+
   var body: some View {
     if #available(iOS 27.1, *) {
       ArrangementView {
-        TentAudioView(audio: audio, notebook: notebook)
-      } secondary: {
         BookCoverArtwork()
           .overlay(FolioPalette.forestShade.opacity(0.28))
           .accessibilityHidden(true)
+      } secondary: {
+        TentAudioView(audio: audio, notebook: notebook)
+          .rotationEffect(needsCounterRotation ? .degrees(180) : .zero)
       }
       .arrangementViewStyle(.overlay)
-      .rotationEffect(.degrees(180))
       .background(FolioPalette.forestShade)
+      .overlay(alignment: .topLeading) {
+        InterfaceOrientationProbe(onChange: updateInterfaceOrientation)
+          .frame(width: 1, height: 1)
+          .opacity(0)
+          .accessibilityHidden(true)
+          .allowsHitTesting(false)
+      }
     } else {
       TentAudioView(audio: audio, notebook: notebook)
+    }
+  }
+
+  private var needsCounterRotation: Bool {
+    guard let firstInterfaceOrientation, let currentInterfaceOrientation else { return false }
+    switch (firstInterfaceOrientation, currentInterfaceOrientation) {
+    case (.portrait, .portraitUpsideDown),
+      (.portraitUpsideDown, .portrait),
+      (.landscapeLeft, .landscapeRight),
+      (.landscapeRight, .landscapeLeft):
+      return true
+    default:
+      return false
+    }
+  }
+
+  private func updateInterfaceOrientation(_ orientation: UIInterfaceOrientation) {
+    guard orientation != currentInterfaceOrientation else { return }
+    if firstInterfaceOrientation == nil {
+      firstInterfaceOrientation = orientation
+    }
+    currentInterfaceOrientation = orientation
+  }
+}
+
+private struct InterfaceOrientationProbe: UIViewRepresentable {
+  var onChange: (UIInterfaceOrientation) -> Void
+
+  func makeUIView(context: Context) -> OrientationReportingView {
+    let view = OrientationReportingView()
+    view.onChange = onChange
+    return view
+  }
+
+  func updateUIView(_ uiView: OrientationReportingView, context: Context) {
+    uiView.onChange = onChange
+    uiView.reportOrientation()
+  }
+}
+
+private final class OrientationReportingView: UIView {
+  var onChange: ((UIInterfaceOrientation) -> Void)?
+  private var lastReportedOrientation: UIInterfaceOrientation?
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    reportOrientation()
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    reportOrientation()
+  }
+
+  func reportOrientation() {
+    guard
+      let orientation = window?.windowScene?.effectiveGeometry.interfaceOrientation,
+      orientation != lastReportedOrientation
+    else { return }
+
+    lastReportedOrientation = orientation
+    DispatchQueue.main.async { [weak self] in
+      self?.onChange?(orientation)
     }
   }
 }
